@@ -17,10 +17,9 @@ use std::vec::Vec;
 pub struct Genome {
     inputs: u32,                // Number of Inputs
     outputs: u32,               // Number of Outputs
-    nodes: Vec<Node>,           // Vector of Nodes
+    pub nodes: Vec<Node>,       // Vector of Nodes
     pub conns: Vec<Connection>, // Vector of Connections
     pub fitness: f64,           // Fitness of this Genome
-    species_id: u32,            // the Species ID of this Genome
 }
 
 impl fmt::Debug for Genome {
@@ -51,11 +50,10 @@ impl Genome {
             nodes: Vec::with_capacity((inputs + outputs + 1) as usize),
             conns: Vec::with_capacity(((inputs + 1) * outputs) as usize),
             fitness: 0.,
-            species_id: 0,
         };
 
         if crossover {
-            return;
+            return genome;
         }
 
         let mut rng = thread_rng();
@@ -80,10 +78,6 @@ impl Genome {
             dy_curr += dy;
         }
 
-        if crossover {
-            return genome;
-        }
-
         let mut ctr = 1;
         for i in 0..(inputs + 1) as usize {
             let from = genome.nodes[i].innov;
@@ -104,10 +98,6 @@ impl Genome {
         let fitness = self.fitness + fit;
 
         self.fitness = if fitness < 0. { 0. } else { fitness };
-    }
-
-    pub fn set_species(&mut self, id: u32) {
-        self.species_id = id;
     }
 
     pub fn feed_forward(&mut self, input: &Vec<f64>) -> Result<Vec<f64>, &'static str> {
@@ -143,7 +133,7 @@ impl Genome {
         }
 
         Ok(((self.inputs + 2)..(self.inputs + self.outputs + 2))
-            .map(|v| self.nodes[v].activate(*node_vals.get(&v).unwrap(), 1.))
+            .map(|v| *node_vals.get(&v).unwrap())
             .collect())
     }
 
@@ -261,7 +251,7 @@ impl Genome {
         let x = (from_node.x + to_node.x) / 2.;
         let y = (from_node.y + to_node.y) / 2.;
 
-        let new_node = Node::new(details.node, x, y);
+        let new_node = Node::new(details.node, x, y, rand::random::<Activations>());
         let in_conn = Connection::new(details.in_conn, from_node.innov, new_node.innov, 1., true);
 
         let out_conn = Connection::new(
@@ -343,20 +333,6 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_genome() {
-        let mut gen = Genome::new(3, 2, false);
-
-        for conn in &mut gen.conns {
-            conn.weight = 1.;
-        }
-
-        assert_eq!(
-            gen.feed_forward(&vec![1., 1., 1.]).unwrap(),
-            vec![Node::activate(4., 1.); 2]
-        );
-    }
-
-    #[test]
     fn conn_mut_fully_connected() {
         let mut gen = Genome::new(3, 2, false);
         let mut hist = History::new(3, 2);
@@ -410,7 +386,6 @@ impl Clone for Genome {
             nodes: self.nodes.clone(),
             conns: self.conns.clone(),
             fitness: self.fitness,
-            species_id: self.species_id,
         }
     }
 }
