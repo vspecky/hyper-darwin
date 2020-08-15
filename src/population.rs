@@ -12,7 +12,6 @@ pub struct Population {
     hist: History,
     pub best_fitness: f64,
     pub best_genome: Option<Genome>,
-    next_species_id: u32,
     pub generations: u64,
 }
 
@@ -28,7 +27,6 @@ impl Population {
             hist: History::new(inputs, outputs),
             best_fitness: 0.,
             best_genome: None,
-            next_species_id: 1,
             generations: 0,
         };
 
@@ -42,7 +40,6 @@ impl Population {
         self.species.clear();
         self.best_fitness = 0.;
         self.best_genome = None;
-        self.next_species_id = 1;
         self.generations = 0;
         self.hist = History::new(self.sets.inputs, self.sets.outputs);
 
@@ -127,19 +124,16 @@ impl Population {
             species.genomes.clear();
         }
 
-        'outer: for genome in &self.population {
+        'outer: for genome in self.population.drain(..) {
             for species in &mut self.species {
-                if species.can_accomodate(genome, &self.sets) {
-                    species.add_genome(genome.clone());
+                if species.can_accomodate(&genome, &self.sets) {
+                    species.add_genome(genome);
                     continue 'outer;
                 }
             }
 
-            let new_spec = Species::new(genome.clone(), self.next_species_id);
-            self.next_species_id += 1;
+            let new_spec = Species::new(genome);
             self.species.push(new_spec);
         }
-
-        self.population.clear();
     }
 }
