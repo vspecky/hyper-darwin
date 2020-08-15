@@ -20,7 +20,8 @@ impl Distribution<Activations> for Standard {
             3 => Activations::Gaussian,
             4 => Activations::Sigmoid,
             5 => Activations::Absolute,
-            6 => Activations::Linear,
+            2 => Activations::Linear,
+            _ => Activations::Sigmoid,
         }
     }
 }
