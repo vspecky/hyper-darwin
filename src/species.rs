@@ -12,7 +12,6 @@ pub struct Species {
     pub genomes: Vec<Genome>,
     max_fitness: f64,
     pub avg_fitness: f64,
-    species_id: u32,
     pub stagnancy: u32,
     representative: Genome,
     pub assigned_offspring: usize,
@@ -22,7 +21,6 @@ impl fmt::Debug for Species {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut res = String::from(&format!("Genomes: {}\n", self.genomes.len()));
         res += &format!("max_fitness: {}\n", self.max_fitness);
-        res += &format!("Species ID: {}\n", self.species_id);
         res += &format!("representative: {:?}", self.representative);
 
         write!(f, "{}", res)
@@ -30,17 +28,15 @@ impl fmt::Debug for Species {
 }
 
 impl Species {
-    pub fn new(mut head: Genome, id: u32) -> Self {
+    pub fn new(head: Genome) -> Self {
         let max_fitness = head.fitness;
         let avg_fitness = head.fitness;
-        head.set_species(id);
         let repr = head.clone();
 
         let species = Self {
             genomes: vec![head],
             max_fitness,
             avg_fitness,
-            species_id: id,
             stagnancy: 0,
             representative: repr,
             assigned_offspring: 0,
@@ -200,9 +196,7 @@ impl Species {
         }
     }
 
-    pub fn add_genome(&mut self, mut gen: Genome) {
-        gen.set_species(self.species_id);
-
+    pub fn add_genome(&mut self, gen: Genome) {
         self.genomes.push(gen);
     }
 
