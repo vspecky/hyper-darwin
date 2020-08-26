@@ -17,14 +17,14 @@ pub struct Population {
 
 impl Population {
     pub fn new(sets: Settings) -> Self {
-        let inputs = sets.inputs;
-        let outputs = sets.outputs;
+        let inputs = if sets.third_param { 6 } else { 4 };
+
         let pop_size = sets.pop_size as usize;
         let mut pop = Self {
             sets: sets,
             population: Vec::<Genome>::with_capacity(pop_size),
             species: Vec::new(),
-            hist: History::new(inputs, outputs),
+            hist: History::new(inputs, 1),
             best_fitness: 0.,
             best_genome: None,
             generations: 0,
@@ -41,10 +41,11 @@ impl Population {
         self.best_fitness = 0.;
         self.best_genome = None;
         self.generations = 0;
-        self.hist = History::new(self.sets.inputs, self.sets.outputs);
+        let inputs = if self.sets.third_param { 4 } else { 6 };
+        self.hist = History::new(inputs, 1);
 
         for _ in 0..self.sets.pop_size {
-            let genome = Genome::new(self.sets.inputs, self.sets.outputs, false);
+            let genome = Genome::new(inputs, 1, false);
             self.population.push(genome);
         }
     }
