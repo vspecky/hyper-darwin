@@ -91,12 +91,14 @@ impl Species {
             }
         }
 
-        for repr_node in &self.representative.nodes {
+        'outer: for repr_node in &self.representative.nodes {
             for new_node in &gen.nodes {
                 if repr_node.innov == new_node.innov {
                     if repr_node.activation != new_node.activation {
                         differing_activs += 1.;
                     }
+
+                    continue 'outer;
                 }
             }
         }
