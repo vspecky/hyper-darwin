@@ -61,7 +61,7 @@ impl Connection {
         self.enabled = false;
     }
 
-    pub fn mutate_weight(&mut self, sets: &Settings) {
+    pub fn mutate_weight(&mut self, sets: &Settings) -> f64 {
         let mut rng = thread_rng();
 
         if rng.gen::<f64>() < sets.wt_shift_rate {
@@ -75,5 +75,7 @@ impl Connection {
         } else {
             self.weight = rng.gen::<f64>() * 2. - 1.;
         }
+
+        self.weight
     }
 }
