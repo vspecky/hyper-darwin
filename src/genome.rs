@@ -1,7 +1,9 @@
 use crate::activations::Activations;
 use crate::connection::Connection;
 use crate::history::History;
+use crate::hyper_tensor::HyperTensor;
 use crate::node::Node;
+use crate::settings::HyperSettings;
 use crate::settings::Settings;
 
 use rand::prelude::*;
@@ -100,7 +102,7 @@ impl Genome {
         self.fitness = if fitness < 0. { 0. } else { fitness };
     }
 
-    pub fn feed_forward(&mut self, input: &Vec<f64>) -> Result<Vec<f64>, &'static str> {
+    pub fn feed_forward(&self, input: &Vec<f64>) -> Result<f64, &'static str> {
         if input.len() != self.inputs as usize {
             return Err("Provided input size doesn't match Genome input size");
         }
@@ -132,9 +134,70 @@ impl Genome {
             }
         }
 
-        Ok(((self.inputs + 2)..(self.inputs + self.outputs + 2))
-            .map(|v| *node_vals.get(&v).unwrap())
-            .collect())
+        Ok(((1. / (1. + (*node_vals.get(&(self.inputs + 2)).unwrap() * -4.9).exp())) - 0.5) * 2.)
+    }
+
+    pub fn hyper_feed_forward<T>(
+        &self,
+        input: HyperTensor,
+        sets: &HyperSettings,
+        third_param_fn: Option<T>,
+    ) -> Result<Vec<Vec<f64>>, &'static str>
+    where
+        T: Fn(f64, f64) -> f64,
+    {
+        if self.inputs == 4 && third_param_fn.is_some() {
+            return Err("Didn't expect a Third Parameter Function");
+        } else if self.inputs == 6 && third_param_fn.is_none() {
+            return Err("Expected a Third Parameter Function. Got none");
+        }
+
+        let dy = (input.m - 1.) / 2.;
+        let dx = (input.n - 1.) / 2.;
+
+        let x_dir = (0..input.n as u64)
+            .map(|v| -1.0 + v as f64 * dx)
+            .collect::<Vec<f64>>();
+
+        let y_dir = (0..input.m as u64)
+            .map(|v| -1.0 + v as f64 * dy)
+            .collect::<Vec<f64>>();
+
+        let mut res = HyperTensor::zeros(input.m as usize, input.n as usize).unwrap();
+
+        if self.inputs == 6 {
+            let tpfn = third_param_fn.unwrap();
+
+            for (&y1, row_inp) in y_dir.iter().zip(input.values.iter()) {
+                for (&x1, val_inp) in x_dir.iter().zip(row_inp.iter()) {
+                    for (&y2, row_out) in y_dir.iter().zip(res.values.iter_mut()) {
+                        for (&x2, val_out) in x_dir.iter().zip(row_out.iter_mut()) {
+                            let inp = vec![x1, y1, tpfn(x1, y1), x2, y2, tpfn(x2, y2)];
+
+                            let cppn_out = self.feed_forward(&inp).unwrap();
+
+                            *val_out += sets.scaled_weight(cppn_out) * val_inp;
+                        }
+                    }
+                }
+            }
+        } else {
+            for (&y1, row_inp) in y_dir.iter().zip(input.values.iter()) {
+                for (&x1, val_inp) in x_dir.iter().zip(row_inp.iter()) {
+                    for (&y2, row_out) in y_dir.iter().zip(res.values.iter_mut()) {
+                        for (&x2, val_out) in x_dir.iter().zip(row_out.iter_mut()) {
+                            let inp = vec![x1, y1, x2, y2];
+
+                            let cppn_out = self.feed_forward(&inp).unwrap();
+
+                            *val_out += sets.scaled_weight(cppn_out) * val_inp;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(res.values)
     }
 
     pub fn mutate(&mut self, hist: &mut History, sets: &Settings) {
@@ -163,26 +226,25 @@ impl Genome {
         let from_node_pool = self
             .nodes
             .iter()
-            .filter(|n| {
-                if n.x == 1. {
-                    false
-                } else {
-                    let poss_tos = self
-                        .nodes
-                        .iter()
-                        .filter(|tn| tn.x > n.x)
-                        .collect::<Vec<&Node>>()
-                        .len();
-
-                    let conns = self
-                        .conns
-                        .iter()
-                        .filter(|c| c.from == n.innov)
-                        .collect::<Vec<&Connection>>()
-                        .len();
-
-                    poss_tos > conns
+            .filter(|node| {
+                if node.x == 1. {
+                    return false;
                 }
+
+                let to_nodes = self
+                    .nodes
+                    .iter()
+                    .filter(|n| {
+                        n.x > node.x
+                            && self
+                                .conns
+                                .iter()
+                                .find(|c| c.from == node.innov && c.to == n.innov)
+                                .is_none()
+                    })
+                    .collect::<Vec<&Node>>();
+
+                to_nodes.len() > 0
             })
             .collect::<Vec<&Node>>();
 
@@ -200,20 +262,12 @@ impl Genome {
                     return false;
                 }
 
-                match self
-                    .conns
+                self.conns
                     .iter()
                     .find(|c| c.from == from_node.innov && c.to == n.innov)
-                {
-                    Some(_) => false,
-                    None => true,
-                }
+                    .is_none()
             })
             .collect::<Vec<&Node>>();
-
-        if to_node_pool.len() == 0 {
-            return;
-        }
 
         let to_node = to_node_pool.choose(&mut rng).unwrap();
 
@@ -325,56 +379,6 @@ impl Genome {
         offspring.nodes = male.nodes.clone();
 
         offspring
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn conn_mut_fully_connected() {
-        let mut gen = Genome::new(3, 2, false);
-        let mut hist = History::new(3, 2);
-
-        gen.add_conn(&mut hist);
-
-        assert!(gen.conns.len() == 8 && hist.conn_history.len() == 8);
-    }
-
-    #[test]
-    fn conn_mut_new() {
-        let mut gen = Genome::new(3, 2, false);
-        let mut hist = History::new(3, 2);
-
-        gen.conns.remove(0);
-        hist.conn_history.remove(0);
-
-        gen.add_conn(&mut hist);
-
-        assert!(gen.conns.iter().find(|c| c.innov == 9).is_some());
-    }
-
-    #[test]
-    fn node_mut() {
-        let mut gen = Genome::new(3, 2, false);
-        let mut hist = History::new(3, 2);
-
-        gen.add_node(&mut hist);
-
-        assert!(
-            gen.conns.iter().find(|c| c.innov == 9).is_some()
-                && gen.conns.iter().find(|c| c.innov == 10).is_some()
-                && gen.nodes.iter().find(|n| n.innov == 7).is_some()
-                && hist.conn_history.len() == 10
-                && gen
-                    .conns
-                    .iter()
-                    .filter(|c| !c.enabled)
-                    .collect::<Vec<&Connection>>()
-                    .len()
-                    == 1
-        );
     }
 }
 
