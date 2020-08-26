@@ -1,7 +1,6 @@
 pub struct Settings {
     pub pop_size: u32,
-    pub inputs: u32,
-    pub outputs: u32,
+    pub third_param: bool,
 
     pub conn_mut_rate: f64,
     pub node_mut_rate: f64,
@@ -20,12 +19,51 @@ pub struct Settings {
     pub allowed_stagnancy: u32,
 }
 
-impl Settings {
-    pub fn new(inputs: u32, outputs: u32, pop_size: u32) -> Self {
+pub struct HyperSettings {
+    pub min_weight: f64,
+    pub max_weight: f64,
+}
+
+impl HyperSettings {
+    pub fn default() -> Self {
         Self {
-            inputs,
-            outputs,
+            min_weight: 0.2,
+            max_weight: 3.0,
+        }
+    }
+
+    pub fn min_weight(mut self, w: f64) -> Self {
+        self.min_weight = w;
+        self
+    }
+
+    pub fn max_weight(mut self, w: f64) -> Self {
+        self.max_weight = w;
+        self
+    }
+
+    pub fn scaled_weight(&self, w: f64) -> f64 {
+        if w.abs() < self.min_weight {
+            return 0.;
+        }
+
+        let ratio = (w - self.min_weight) / (self.max_weight - self.min_weight);
+
+        let weight_magnitude = self.max_weight * ratio;
+
+        if w < 0. {
+            -(weight_magnitude.abs())
+        } else {
+            weight_magnitude.abs()
+        }
+    }
+}
+
+impl Settings {
+    pub fn new(pop_size: u32) -> Self {
+        Self {
             pop_size,
+            third_param: false,
             conn_mut_rate: 0.05,
             node_mut_rate: 0.03,
             wt_mut_rate: 0.8,
@@ -40,6 +78,11 @@ impl Settings {
             speciation_threshold: 3.,
             allowed_stagnancy: 15,
         }
+    }
+
+    pub fn third_param(mut self, tp: bool) -> Self {
+        self.third_param = tp;
+        self
     }
 
     pub fn conn_mut_rate(mut self, rate: f64) -> Self {
